@@ -70,7 +70,6 @@ async function monitorTicketAvailability(opponentTeam, refreshInterval = 3) {
     }
 
     browser = await puppeteer.launch({
-      headless: false,
       args: ["--no-sandbox"],
     });
 
