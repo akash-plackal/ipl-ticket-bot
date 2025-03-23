@@ -2,8 +2,10 @@ import puppeteer from "puppeteer";
 import fetch from "node-fetch";
 
 // Telegram configuration - REPLACE WITH YOUR VALUES
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const TELEGRAM_BOT_TOKEN =
+  process.env.TELEGRAM_BOT_TOKEN ||
+  "7971649577:AAGLCFsXlNW-JP7SZOVEyKqslfmoHCkI5L8";
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "6795485219";
 
 // Define the list of available IPL teams for reference
 const iplTeams = [
@@ -87,7 +89,7 @@ async function monitorTicketAvailability(opponentTeam, refreshInterval = 3) {
 
     // Send initial Telegram notification
     await sendTelegramMessage(
-      `🏏 *Monitoring Started*\nLooking for tickets: RCB vs ${opponentTeam}\nWill check every ${refreshInterval} minutes`
+      `🏏 *Monitoring Started*\nLooking for tickets: RCB vs ${opponentTeam}\nWill check every ${refreshInterval} minutes`,
     );
 
     // Function to check availability
@@ -95,14 +97,14 @@ async function monitorTicketAvailability(opponentTeam, refreshInterval = 3) {
       checkCount++;
       const currentTime = new Date().toLocaleTimeString();
       console.log(
-        `\n[${currentTime}] Check #${checkCount}: Refreshing page...`
+        `\n[${currentTime}] Check #${checkCount}: Refreshing page...`,
       );
 
       try {
         // Check if page is still valid, otherwise recreate browser and page
         if (!page || page.isClosed()) {
           console.log(
-            "Page is closed or invalid, recreating browser session..."
+            "Page is closed or invalid, recreating browser session...",
           );
           ({ browser, page } = await createBrowser());
         }
@@ -114,14 +116,14 @@ async function monitorTicketAvailability(opponentTeam, refreshInterval = 3) {
         });
 
         console.log(
-          `Checking ticket availability for RCB vs ${opponentTeam}...`
+          `Checking ticket availability for RCB vs ${opponentTeam}...`,
         );
 
         // Evaluate page for ticket availability
         const ticketsAvailable = await page.evaluate((opponent) => {
           // Find all match cards
           const matchCards = Array.from(
-            document.querySelectorAll(".css-q38j1a")
+            document.querySelectorAll(".css-q38j1a"),
           );
 
           // Filter cards for RCB vs the specified opponent team
@@ -141,7 +143,7 @@ async function monitorTicketAvailability(opponentTeam, refreshInterval = 3) {
 
           // Check if BUY TICKETS button exists and is not sold out
           const buyButton = matchCard.querySelector(
-            "button.chakra-button.css-9le7ot"
+            "button.chakra-button.css-9le7ot",
           );
 
           // Use standard DOM methods to find status buttons
@@ -150,12 +152,12 @@ async function monitorTicketAvailability(opponentTeam, refreshInterval = 3) {
             (btn) =>
               btn.textContent.includes("COMING SOON") ||
               btn.textContent.includes("SOLD OUT") ||
-              btn.textContent.includes("PHASE 1 SOLD OUT")
+              btn.textContent.includes("PHASE 1 SOLD OUT"),
           );
 
           // Get match date
           const dateElement = matchCard.querySelector(
-            ".chakra-text.css-1nm99ps"
+            ".chakra-text.css-1nm99ps",
           );
           const date = dateElement ? dateElement.textContent : "Date not found";
 
@@ -214,7 +216,7 @@ async function monitorTicketAvailability(opponentTeam, refreshInterval = 3) {
             console.log(`Price Range: ${ticketsAvailable.price}`);
             console.log(`Button Class: ${ticketsAvailable.buttonClass}`);
             console.log(
-              "The browser window is kept open for you to proceed with booking"
+              "The browser window is kept open for you to proceed with booking",
             );
 
             // Send Telegram alert - this is the key notification
@@ -269,7 +271,7 @@ async function monitorTicketAvailability(opponentTeam, refreshInterval = 3) {
             clearInterval(intervalId);
             console.log("\nMonitoring stopped. Tickets are now available!");
             await sendTelegramMessage(
-              "✅ *Monitoring stopped*. Tickets are now available! Browser window kept open for booking."
+              "✅ *Monitoring stopped*. Tickets are now available! Browser window kept open for booking.",
             );
           }
         } catch (error) {
@@ -280,7 +282,7 @@ async function monitorTicketAvailability(opponentTeam, refreshInterval = 3) {
       // Keep the script running
       console.log(`\nMonitoring continues every ${refreshInterval} minutes...`);
       console.log(
-        "(The browser will remain open for you to interact with it when tickets become available)"
+        "(The browser will remain open for you to interact with it when tickets become available)",
       );
 
       // Clean up on process exit (Ctrl+C)
