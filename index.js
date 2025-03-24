@@ -72,7 +72,8 @@ async function monitorTicketAvailability(opponentTeam, refreshInterval = 3) {
     }
 
     browser = await puppeteer.launch({
-      args: ["--no-sandbox"],
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
 
     page = await browser.newPage();
