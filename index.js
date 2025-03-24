@@ -21,6 +21,48 @@ const iplTeams = [
   "Sunrisers Hyderabad",
 ];
 
+// Global variables to track last check time
+let lastCheckTime = null;
+let lastCheckResult = null;
+let checkCount = 0;
+let monitoringStartTime = null;
+
+// Function to format date in a human-readable way
+function formatDate(date) {
+  if (!date) return "Not available";
+
+  const options = {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZoneName: "short",
+  };
+
+  return new Date(date).toLocaleString("en-US", options);
+}
+
+// Function to get time elapsed since last check
+function getTimeElapsedSinceLastCheck() {
+  if (!lastCheckTime) return "No checks performed yet";
+
+  const now = new Date();
+  const elapsed = now - new Date(lastCheckTime);
+
+  // Convert to minutes and seconds
+  const minutes = Math.floor(elapsed / 60000);
+  const seconds = Math.floor((elapsed % 60000) / 1000);
+
+  if (minutes > 0) {
+    return `${minutes} minute${minutes !== 1 ? "s" : ""} and ${seconds} second${seconds !== 1 ? "s" : ""} ago`;
+  } else {
+    return `${seconds} second${seconds !== 1 ? "s" : ""} ago`;
+  }
+}
+
 // Function to send Telegram messages
 async function sendTelegramMessage(message) {
   try {
@@ -49,6 +91,9 @@ async function sendTelegramMessage(message) {
 }
 
 async function monitorTicketAvailability(opponentTeam, refreshInterval = 3) {
+  // Set monitoring start time
+  monitoringStartTime = new Date();
+
   // Validate the input team
   if (!iplTeams.includes(opponentTeam)) {
     console.log(`Warning: "${opponentTeam}" may not be a valid IPL team name.`);
@@ -59,7 +104,6 @@ async function monitorTicketAvailability(opponentTeam, refreshInterval = 3) {
   let browser = null;
   let page = null;
   let isAvailable = false;
-  let checkCount = 0;
   let intervalId = null;
 
   // Function to create a new browser instance
@@ -97,9 +141,11 @@ async function monitorTicketAvailability(opponentTeam, refreshInterval = 3) {
     // Function to check availability
     const checkAvailability = async () => {
       checkCount++;
-      const currentTime = new Date().toLocaleTimeString();
+      const currentTime = new Date();
+      lastCheckTime = currentTime;
+
       console.log(
-        `\n[${currentTime}] Check #${checkCount}: Refreshing page...`,
+        `\n[${currentTime.toLocaleTimeString()}] Check #${checkCount}: Refreshing page...`,
       );
 
       try {
@@ -196,6 +242,9 @@ async function monitorTicketAvailability(opponentTeam, refreshInterval = 3) {
             };
           }
         }, opponentTeam);
+
+        // Save the result
+        lastCheckResult = ticketsAvailable;
 
         // Process the result
         if (ticketsAvailable.found) {
@@ -308,13 +357,28 @@ async function monitorTicketAvailability(opponentTeam, refreshInterval = 3) {
 // Set up a dummy HTTP server to keep the service running and respond to health checks
 const PORT = process.env.PORT || 3000;
 const server = http.createServer((req, res) => {
-  // Get monitoring status information
+  // Set CORS headers to allow access from anywhere
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  // Get monitoring status information with human-readable date
   const monitoringStatus = {
     status: "active",
     monitoring: "RCB tickets",
     team: targetTeam,
     refreshInterval: refreshIntervalMinutes,
-    lastCheck: new Date().toISOString(),
+    lastCheck: lastCheckTime
+      ? formatDate(lastCheckTime)
+      : "No checks performed yet",
+    lastCheckISO: lastCheckTime ? lastCheckTime.toISOString() : null,
+    timeElapsed: getTimeElapsedSinceLastCheck(),
+    checksPerformed: checkCount,
+    monitoringSince: monitoringStartTime
+      ? formatDate(monitoringStartTime)
+      : "Not started",
+    ticketsAvailable: lastCheckResult?.available || false,
+    matchStatus: lastCheckResult?.status || "Unknown",
   };
 
   // Handle basic routes
@@ -322,12 +386,80 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "text/html" });
     res.write(`
       <html>
-        <head><title>RCB Ticket Monitor</title></head>
+        <head>
+          <title>RCB Ticket Monitor</title>
+          <style>
+            body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }
+            h1 { color: #E42629; } /* RCB red */
+            .status-box { background-color: #f8f9fa; border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+            .tickets-available { background-color: #FFF9C4; border: 1px solid #FFC107; font-weight: bold; }
+            .data-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
+            .label { font-weight: bold; }
+            .refresh-btn { background-color: #E42629; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; }
+            .refresh-btn:hover { background-color: #C62023; }
+          </style>
+          <meta http-equiv="refresh" content="60">
+        </head>
         <body>
           <h1>RCB Ticket Monitor Service</h1>
-          <p>Monitoring tickets for RCB vs ${targetTeam}</p>
-          <p>Checking every ${refreshIntervalMinutes} minutes</p>
-          <p>Service is active</p>
+          
+          <div class="status-box ${lastCheckResult?.available ? "tickets-available" : ""}">
+            <h2>Monitor Status: ${lastCheckResult?.available ? "🚨 TICKETS AVAILABLE!" : "✅ Active"}</h2>
+            <div class="data-grid">
+              <div class="label">Team:</div>
+              <div>RCB vs ${targetTeam}</div>
+              
+              <div class="label">Check Frequency:</div>
+              <div>Every ${refreshIntervalMinutes} minutes</div>
+              
+              <div class="label">Last Check:</div>
+              <div>${monitoringStatus.lastCheck}</div>
+              
+              <div class="label">Time Since Last Check:</div>
+              <div>${monitoringStatus.timeElapsed}</div>
+              
+              <div class="label">Checks Performed:</div>
+              <div>${monitoringStatus.checksPerformed}</div>
+              
+              <div class="label">Monitoring Since:</div>
+              <div>${monitoringStatus.monitoringSince}</div>
+              
+              ${
+                lastCheckResult
+                  ? `
+                <div class="label">Match Status:</div>
+                <div>${lastCheckResult.status || (lastCheckResult.available ? "TICKETS AVAILABLE" : "Not Available")}</div>
+                
+                ${
+                  lastCheckResult.date
+                    ? `
+                  <div class="label">Match Date:</div>
+                  <div>${lastCheckResult.date}</div>
+                `
+                    : ""
+                }
+                
+                ${
+                  lastCheckResult.price
+                    ? `
+                  <div class="label">Price:</div>
+                  <div>${lastCheckResult.price}</div>
+                `
+                    : ""
+                }
+              `
+                  : ""
+              }
+            </div>
+          </div>
+          
+          <p>This page auto-refreshes every 60 seconds. <button class="refresh-btn" onclick="window.location.reload()">Refresh Now</button></p>
+          
+          <h3>API Endpoints:</h3>
+          <ul>
+            <li><code>/health</code> - Get monitor status in JSON format</li>
+            <li><code>/</code> - This status page</li>
+          </ul>
         </body>
       </html>
     `);
@@ -352,6 +484,7 @@ const refreshIntervalMinutes = 3;
 server.listen(PORT, () => {
   console.log(`HTTP server running on port ${PORT}`);
   console.log(`Health check available at http://localhost:${PORT}/health`);
+  console.log(`Status page available at http://localhost:${PORT}/`);
 
   // Start monitoring
   monitorTicketAvailability(targetTeam, refreshIntervalMinutes);
