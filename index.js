@@ -1,5 +1,6 @@
 import puppeteer from "puppeteer";
 import fetch from "node-fetch";
+import http from "http";
 
 // Telegram configuration - REPLACE WITH YOUR VALUES
 const TELEGRAM_BOT_TOKEN =
@@ -304,10 +305,54 @@ async function monitorTicketAvailability(opponentTeam, refreshInterval = 3) {
   }
 }
 
+// Set up a dummy HTTP server to keep the service running and respond to health checks
+const PORT = process.env.PORT || 3000;
+const server = http.createServer((req, res) => {
+  // Get monitoring status information
+  const monitoringStatus = {
+    status: "active",
+    monitoring: "RCB tickets",
+    team: targetTeam,
+    refreshInterval: refreshIntervalMinutes,
+    lastCheck: new Date().toISOString(),
+  };
+
+  // Handle basic routes
+  if (req.url === "/") {
+    res.writeHead(200, { "Content-Type": "text/html" });
+    res.write(`
+      <html>
+        <head><title>RCB Ticket Monitor</title></head>
+        <body>
+          <h1>RCB Ticket Monitor Service</h1>
+          <p>Monitoring tickets for RCB vs ${targetTeam}</p>
+          <p>Checking every ${refreshIntervalMinutes} minutes</p>
+          <p>Service is active</p>
+        </body>
+      </html>
+    `);
+  } else if (req.url === "/health" || req.url === "/status") {
+    // Health check endpoint
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.write(JSON.stringify(monitoringStatus));
+  } else {
+    // Not found
+    res.writeHead(404, { "Content-Type": "text/plain" });
+    res.write("404 Not Found");
+  }
+
+  res.end();
+});
+
 // Example usage with the team you want to monitor
-//const targetTeam = "Chennai Super Kings";
 const targetTeam = "Chennai Super Kings";
 const refreshIntervalMinutes = 3;
 
-// Start monitoring
-monitorTicketAvailability(targetTeam, refreshIntervalMinutes);
+// Start the HTTP server
+server.listen(PORT, () => {
+  console.log(`HTTP server running on port ${PORT}`);
+  console.log(`Health check available at http://localhost:${PORT}/health`);
+
+  // Start monitoring
+  monitorTicketAvailability(targetTeam, refreshIntervalMinutes);
+});
